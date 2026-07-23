@@ -49,6 +49,13 @@
         
         body {
             font-family: 'Inter', system_ui, sans-serif;
+            /* This app is light-themed everywhere now, but native form
+               controls (number spinners, checkboxes, date pickers) still
+               follow the OS/browser dark-mode preference unless told
+               otherwise - without this, a device in dark mode can render
+               a number input's text in white-on-white and make it look
+               like typed values silently vanish. */
+            color-scheme: light;
         }
         
         .font-display {
@@ -1842,7 +1849,7 @@
                                     <td class="py-2.5 text-right">
                                         $<input type="number" min="0" step="0.01" value="${item.price || ""}" placeholder="0.00"
                                             onchange="updateInvoiceItemPrice('${item.id}', this.value)"
-                                            class="w-20 text-right border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                                            class="w-20 text-right border border-slate-300 rounded-lg px-2 py-1 text-sm" style="color-scheme: light; color: #0f2438; background: #ffffff;">
                                     </td>
                                 </tr>
                             `).join("")}
