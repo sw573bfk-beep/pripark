@@ -120,6 +120,27 @@
         .bg-blue-600, .bg-blue-700, .bg-green-600, .bg-green-700 {
             color: #ffffff;
         }
+
+        @media print {
+            body * { visibility: hidden; }
+            #invoice-printable, #invoice-printable * { visibility: visible; }
+            #invoice-printable {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                border: none !important;
+                box-shadow: none !important;
+            }
+            .no-print { display: none !important; }
+            #invoice-printable input[type="number"] {
+                border: none !important;
+                background: transparent !important;
+                -webkit-appearance: none;
+                appearance: none;
+                padding: 0 !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-200">
@@ -264,6 +285,7 @@
                 <div onclick="switchTab(this, 'manufacturing')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Manufacturing</div>
                 <div onclick="switchTab(this, 'confirmation')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Confirmation</div>
                 <div onclick="switchTab(this, 'approved')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Approved</div>
+                <div onclick="switchTab(this, 'invoice')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Invoice</div>
             </div>
 
             <!-- Tab Content (scrolls internally) -->
@@ -386,6 +408,9 @@
                 </div>
                 <div id="tab-approved" class="tab-content hidden">
                     <div id="approved-content"></div>
+                </div>
+                <div id="tab-invoice" class="tab-content hidden">
+                    <div id="invoice-content"></div>
                 </div>
             </div>
             </div>
@@ -1747,6 +1772,111 @@
                 `</div>`;
         }
 
+        // ==================== INVOICE ====================
+        function renderInvoiceTab() {
+            const container = document.getElementById("invoice-content");
+            if (!container) return;
+            const job = getCurrentJob();
+            if (!job) return;
+            ensureProofingFields(job);
+
+            const approvedItems = job.proofItems.filter(p => p.status === "approved");
+
+            if (approvedItems.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-file-invoice-dollar text-4xl mb-3"></i>
+                        <p>No approved signs yet</p>
+                        <p class="text-sm mt-1">An invoice can be generated once at least one sign is approved.</p>
+                    </div>`;
+                return;
+            }
+
+            const total = approvedItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+            const navLogo = document.querySelector('nav img[alt="PriPark"]');
+            const logoSrc = navLogo ? navLogo.src : "";
+
+            container.innerHTML = `
+                <div class="flex justify-end mb-6 no-print">
+                    <button onclick="printInvoice()" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-2xl text-sm font-semibold flex items-center gap-x-2">
+                        <i class="fa-solid fa-print"></i> Print / Save as PDF
+                    </button>
+                </div>
+
+                <div id="invoice-printable" class="bg-white text-slate-900 rounded-3xl border border-slate-200 p-8 max-w-3xl mx-auto">
+                    <div class="flex items-start justify-between mb-8 pb-6 border-b border-slate-200">
+                        <div>
+                            ${logoSrc ? `<img src="${logoSrc}" alt="PriPark" class="h-10 w-auto">` : `<div class="font-display text-2xl font-bold tracking-tighter">PriPark</div>`}
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-semibold">INVOICE</div>
+                            <div class="text-sm text-slate-500">Job #${escapeHtml(job.id)}</div>
+                            <div class="text-sm text-slate-500">${new Date().toLocaleDateString()}</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-8">
+                        <div class="text-xs font-semibold text-slate-400 mb-1">BILL TO</div>
+                        <div class="font-medium">${escapeHtml(job.carparkName || job.name || "")}</div>
+                        ${job.address ? `<div class="text-sm text-slate-500">${escapeHtml(job.address)}</div>` : ""}
+                        ${job.clientContact ? `<div class="text-sm text-slate-500">${escapeHtml(job.clientContact)}</div>` : ""}
+                    </div>
+
+                    <table class="w-full text-sm mb-2">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-left text-xs text-slate-400">
+                                <th class="pb-2">Sign</th>
+                                <th class="pb-2">Category</th>
+                                <th class="pb-2">Size</th>
+                                <th class="pb-2">Material</th>
+                                <th class="pb-2 text-right">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${approvedItems.map(item => `
+                                <tr class="border-b border-slate-100">
+                                    <td class="py-2.5">${escapeHtml(item.name)}</td>
+                                    <td class="py-2.5">${escapeHtml(item.categoryLabel || "")}</td>
+                                    <td class="py-2.5">${item.widthMm && item.heightMm ? `${item.widthMm} × ${item.heightMm}mm` : "—"}</td>
+                                    <td class="py-2.5">${escapeHtml(item.material || "—")}</td>
+                                    <td class="py-2.5 text-right">
+                                        $<input type="number" min="0" step="0.01" value="${item.price || ""}" placeholder="0.00"
+                                            onchange="updateInvoiceItemPrice('${item.id}', this.value)"
+                                            class="w-20 text-right border border-slate-300 rounded-lg px-2 py-1 text-sm">
+                                    </td>
+                                </tr>
+                            `).join("")}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4" class="pt-4 text-right font-semibold">Total</td>
+                                <td class="pt-4 text-right font-semibold" id="invoice-total">$${total.toFixed(2)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>`;
+        }
+
+        async function updateInvoiceItemPrice(itemId, value) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+
+            item.price = parseFloat(value) || 0;
+
+            const approvedItems = job.proofItems.filter(p => p.status === "approved");
+            const total = approvedItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0);
+            const totalEl = document.getElementById("invoice-total");
+            if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
+
+            await persistProofItems(job);
+        }
+
+        function printInvoice() {
+            window.print();
+        }
+
         // ==================== LOAD DATA FROM SUPABASE ====================
         async function loadJobsFromSupabase() {
             try {
@@ -2323,6 +2453,9 @@
             }
             if (tabName === "approved") {
                 renderApprovedTab();
+            }
+            if (tabName === "invoice") {
+                renderInvoiceTab();
             }
         }
 
