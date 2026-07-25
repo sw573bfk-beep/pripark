@@ -189,6 +189,11 @@
                         <span id="archive-count" class="ml-1.5 px-2 py-0.5 bg-slate-700 rounded-full text-xs font-mono">0</span>
                     </button>
                     
+                    <button onclick="exportAllData()" title="Download a backup of all data"
+                            class="flex items-center justify-center px-3 py-2 rounded-3xl text-sm font-medium bg-slate-800 hover:bg-slate-700 transition-colors">
+                        <i class="fa-solid fa-download"></i>
+                    </button>
+
                     <button onclick="showNewJobModal()"
                             class="flex items-center gap-x-2 bg-blue-600 hover:bg-blue-700 transition-colors px-5 py-2 rounded-3xl text-sm font-semibold">
                         <i class="fa-solid fa-plus"></i>
@@ -247,7 +252,7 @@
         </div>
 
         <!-- Jobs List -->
-        <div id="jobs-list" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div id="jobs-list" class="flex flex-col gap-2">
             <!-- Populated by JavaScript -->
         </div>
     </div>
@@ -615,6 +620,11 @@
                             <option value="Dibond">Dibond</option>
                             <option value="Corflute">Corflute</option>
                         </select>
+                    </div>
+                    <div>
+                        <div class="section-label">Quantity</div>
+                        <input id="manufacturing-specs-quantity" type="number" min="1" step="1" value="1" class="input-dark w-full rounded-2xl px-4 py-3 text-sm">
+                        <p class="text-xs text-slate-500 mt-1.5">How many identical copies of this sign - tracked as one line, not separate cards.</p>
                     </div>
                 </div>
             </div>
@@ -1398,6 +1408,7 @@
             document.getElementById("manufacturing-specs-width").value = "";
             document.getElementById("manufacturing-specs-height").value = "";
             document.getElementById("manufacturing-specs-material").value = "Dibond";
+            document.getElementById("manufacturing-specs-quantity").value = "1";
 
             document.getElementById("manufacturing-specs-modal").classList.remove("hidden");
             document.getElementById("manufacturing-specs-modal").classList.add("flex");
@@ -1414,6 +1425,7 @@
             const width = parseFloat(document.getElementById("manufacturing-specs-width").value);
             const height = parseFloat(document.getElementById("manufacturing-specs-height").value);
             const material = document.getElementById("manufacturing-specs-material").value;
+            const quantity = parseInt(document.getElementById("manufacturing-specs-quantity").value, 10) || 1;
 
             if (!width || !height) {
                 showToast("Please enter both width and height");
@@ -1422,7 +1434,7 @@
 
             const { categoryId, designId } = pendingManufacturingSend;
             hideManufacturingSpecsModal();
-            await sendDesignToManufacturing(categoryId, designId, { widthMm: width, heightMm: height, material });
+            await sendDesignToManufacturing(categoryId, designId, { widthMm: width, heightMm: height, material, quantity });
         }
 
         // Called from a "Send to Manufacturing" button on a sign design card
@@ -1449,6 +1461,7 @@
                 widthMm: specs ? specs.widthMm : null,
                 heightMm: specs ? specs.heightMm : null,
                 material: specs ? specs.material : null,
+                quantity: specs && specs.quantity ? specs.quantity : 1,
                 status: "manufacturing",
                 comments: []
             });
@@ -1614,6 +1627,7 @@
                 <div class="px-4 py-2 bg-slate-950/50 border-b border-slate-700 flex items-center gap-x-4 text-xs text-slate-400">
                     ${sizeText ? `<span><i class="fa-solid fa-ruler-combined mr-1.5"></i>${sizeText}</span>` : ""}
                     ${item.material ? `<span><i class="fa-solid fa-layer-group mr-1.5"></i>${item.material}</span>` : ""}
+                    ${item.quantity && item.quantity > 1 ? `<span><i class="fa-solid fa-layer-group mr-1.5"></i>Qty: ${item.quantity}</span>` : ""}
                 </div>`;
         }
 
@@ -1799,7 +1813,7 @@
                 return;
             }
 
-            const total = approvedItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+            const total = approvedItems.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (item.quantity || 1)), 0);
             const navLogo = document.querySelector('nav img[alt="PriPark"]');
             const logoSrc = navLogo ? navLogo.src : "";
 
@@ -1836,7 +1850,9 @@
                                 <th class="pb-2">Category</th>
                                 <th class="pb-2">Size</th>
                                 <th class="pb-2">Material</th>
-                                <th class="pb-2 text-right">Price</th>
+                                <th class="pb-2 text-right">Qty</th>
+                                <th class="pb-2 text-right">Unit Price</th>
+                                <th class="pb-2 text-right">Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1846,17 +1862,19 @@
                                     <td class="py-2.5">${escapeHtml(item.categoryLabel || "")}</td>
                                     <td class="py-2.5">${item.widthMm && item.heightMm ? `${item.widthMm} × ${item.heightMm}mm` : "—"}</td>
                                     <td class="py-2.5">${escapeHtml(item.material || "—")}</td>
+                                    <td class="py-2.5 text-right">${item.quantity || 1}</td>
                                     <td class="py-2.5 text-right">
                                         $<input type="number" min="0" step="0.01" value="${item.price || ""}" placeholder="0.00"
                                             onchange="updateInvoiceItemPrice('${item.id}', this.value)"
                                             class="w-20 text-right border border-slate-300 rounded-lg px-2 py-1 text-sm" style="color-scheme: light; color: #0f2438; background: #ffffff;">
                                     </td>
+                                    <td class="py-2.5 text-right" id="invoice-line-total-${item.id}">$${((parseFloat(item.price) || 0) * (item.quantity || 1)).toFixed(2)}</td>
                                 </tr>
                             `).join("")}
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="4" class="pt-4 text-right font-semibold">Total</td>
+                                <td colspan="6" class="pt-4 text-right font-semibold">Total</td>
                                 <td class="pt-4 text-right font-semibold" id="invoice-total">$${total.toFixed(2)}</td>
                             </tr>
                         </tfoot>
@@ -1872,8 +1890,11 @@
 
             item.price = parseFloat(value) || 0;
 
+            const lineTotalEl = document.getElementById(`invoice-line-total-${item.id}`);
+            if (lineTotalEl) lineTotalEl.textContent = `$${((parseFloat(item.price) || 0) * (item.quantity || 1)).toFixed(2)}`;
+
             const approvedItems = job.proofItems.filter(p => p.status === "approved");
-            const total = approvedItems.reduce((sum, i) => sum + (parseFloat(i.price) || 0), 0);
+            const total = approvedItems.reduce((sum, i) => sum + ((parseFloat(i.price) || 0) * (i.quantity || 1)), 0);
             const totalEl = document.getElementById("invoice-total");
             if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
 
@@ -2323,7 +2344,7 @@
 
             if (jobsToShow.length === 0) {
                 container.innerHTML = `
-                    <div class="col-span-full bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center">
+                    <div class="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center">
                         <p class="text-slate-400">No jobs found.</p>
                     </div>
                 `;
@@ -2331,38 +2352,32 @@
             }
 
             jobsToShow.forEach(job => {
-                const card = document.createElement("div");
-                card.className = `job-card bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-3xl p-5 cursor-pointer`;
-                
-                card.innerHTML = `
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <div class="font-mono text-xs text-slate-400 tracking-wider">JOB #${job.id}</div>
-                            <div class="font-semibold text-lg mt-0.5">${job.name}</div>
+                const row = document.createElement("div");
+                row.className = `job-card bg-slate-900 border border-slate-700 hover:border-slate-600 hover:bg-slate-800/50 rounded-2xl px-5 py-3 cursor-pointer`;
+
+                row.innerHTML = `
+                    <div class="flex items-center gap-x-4">
+                        <div class="w-24 shrink-0 font-mono text-xs text-slate-400 tracking-wider">JOB #${escapeHtml(job.id)}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-semibold truncate">${escapeHtml(job.name)}</div>
+                            <div class="text-xs text-slate-400 truncate">${escapeHtml(job.address || "No address set")}</div>
                         </div>
-                        <div class="px-3 py-1 text-xs font-bold rounded-2xl border ${getStatusClass(job.status)}">
+                        <div class="hidden md:flex items-center gap-x-4 text-xs text-slate-400 shrink-0">
+                            <div class="w-28 truncate"><i class="fa-solid fa-calendar mr-1"></i> ${escapeHtml(job.requiredDate || "No date")}</div>
+                            <div class="w-32 truncate"><i class="fa-solid fa-images mr-1"></i> ${getSignsSummary(job)}</div>
+                        </div>
+                        <div class="px-3 py-1 text-xs font-bold rounded-2xl border shrink-0 ${getStatusClass(job.status)}">
                             ${job.status}
                         </div>
-                    </div>
-                    
-                    <div class="text-sm text-slate-300 mb-4">
-                        ${job.address || "No address set"}
-                    </div>
-                    
-                    <div class="flex items-center justify-between text-xs">
-                        <div class="flex items-center gap-x-4 text-slate-400">
-                            <div><i class="fa-solid fa-calendar mr-1"></i> ${job.requiredDate || "No date"}</div>
-                            <div><i class="fa-solid fa-images mr-1"></i> ${getSignsSummary(job)}</div>
-                        </div>
-                        <button onclick="event.stopImmediatePropagation(); openJobDetail('${job.id}')" 
-                                class="px-5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-2xl">
+                        <button onclick="event.stopImmediatePropagation(); openJobDetail('${job.id}')"
+                                class="px-5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-2xl shrink-0">
                             Open
                         </button>
                     </div>
                 `;
-                
-                card.onclick = () => openJobDetail(job.id);
-                container.appendChild(card);
+
+                row.onclick = () => openJobDetail(job.id);
+                container.appendChild(row);
             });
         }
 
@@ -2609,6 +2624,35 @@
         function expandImageInWrapper(buttonEl) {
             const img = buttonEl.parentElement.querySelector("img");
             if (img) showImageLightbox(img.src);
+        }
+
+        // ==================== DATA EXPORT ====================
+        // Downloads everything currently loaded (jobs incl. proof items/prices,
+        // the sign design library, chat history) as a single JSON file - a
+        // local backup independent of Supabase, so a repeat of a paused/lost
+        // project doesn't mean starting over with nothing to fall back on.
+        function exportAllData() {
+            const backup = {
+                exportedAt: new Date().toISOString(),
+                jobs: jobs,
+                signDesigns: signDesigns,
+                archivedSignDesigns: archivedSignDesigns,
+                chatMessages: chatMessages
+            };
+            const json = JSON.stringify(backup, null, 2);
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const dateStamp = new Date().toISOString().split("T")[0];
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `pripark-backup-${dateStamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast("Backup downloaded");
         }
 
         // ==================== TOAST ====================
