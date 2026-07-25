@@ -258,11 +258,11 @@
     </div>
 
     <!-- Job Detail Modal -->
-    <div id="job-detail-modal" onclick="if (event.target.id === 'job-detail-modal') hideJobDetailModal()" 
-         class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-        
-        <div onclick="event.stopImmediatePropagation()" 
-             class="bg-slate-900 w-full max-w-5xl rounded-3xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div id="job-detail-modal" onclick="if (event.target.id === 'job-detail-modal') hideJobDetailModal()"
+         class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center">
+
+        <div onclick="event.stopImmediatePropagation()"
+             class="bg-slate-900 w-full h-full overflow-hidden flex flex-col">
             
             <!-- Modal Header -->
             <div class="px-8 py-5 border-b border-slate-700 flex items-center justify-between bg-slate-950 flex-shrink-0">
@@ -1674,24 +1674,24 @@
                     <div class="grid grid-cols-2 gap-px bg-slate-700">
                         <div class="bg-slate-900">
                             <div class="text-[10px] font-semibold text-slate-400 text-center py-1.5 bg-slate-950">REFERENCE DESIGN</div>
-                            ${buildReferencePreviewHTML(item, 260)}
+                            ${buildReferencePreviewHTML(item, 150)}
                         </div>
                         <div class="bg-slate-900">
                             <div class="text-[10px] font-semibold text-slate-400 text-center py-1.5 bg-slate-950">MANUFACTURED PHOTO</div>
-                            ${buildManufacturedPreviewHTML(item, 260)}
+                            ${buildManufacturedPreviewHTML(item, 150)}
                         </div>
                     </div>
-                    <div class="px-5 py-3 border-b border-slate-700">
-                        <span class="text-sm font-medium">${item.categoryLabel} — ${item.name}</span>
+                    <div class="px-4 py-2.5 border-b border-slate-700">
+                        <span class="text-xs font-medium">${item.categoryLabel} — ${item.name}</span>
                     </div>
                     ${buildSpecsRowHTML(item)}
-                    <div class="p-5">
+                    <div class="p-4">
                         ${buildCommentSectionHTML(item)}
-                        <div class="flex items-center gap-x-3">
-                            <button onclick="rejectManufacturedPhoto('${item.id}')" class="flex-1 py-3 bg-red-950 hover:bg-red-900 text-red-400 rounded-xl font-semibold text-sm flex items-center justify-center gap-x-1.5">
+                        <div class="flex items-center gap-x-2">
+                            <button onclick="rejectManufacturedPhoto('${item.id}')" class="flex-1 py-2.5 bg-red-950 hover:bg-red-900 text-red-400 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-1.5">
                                 <i class="fa-solid fa-xmark"></i> Doesn't Match
                             </button>
-                            <button onclick="confirmSignMatch('${item.id}')" class="flex-1 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-semibold text-sm flex items-center justify-center gap-x-1.5">
+                            <button onclick="confirmSignMatch('${item.id}')" class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-1.5">
                                 <i class="fa-solid fa-check"></i> Confirm Match
                             </button>
                         </div>
@@ -1741,7 +1741,7 @@
                 return;
             }
 
-            container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">` +
+            container.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">` +
                 items.map(item => buildManufacturingItemHTML(item)).join("") +
                 `</div>`;
         }
@@ -1765,7 +1765,7 @@
                 return;
             }
 
-            container.innerHTML = `<div class="grid grid-cols-1 gap-4">` +
+            container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">` +
                 items.map(item => buildConfirmationItemHTML(item)).join("") +
                 `</div>`;
         }
@@ -1788,7 +1788,7 @@
                 return;
             }
 
-            container.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">` +
+            container.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">` +
                 approvedItems.map(item => buildApprovedItemHTML(item)).join("") +
                 `</div>`;
         }
