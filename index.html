@@ -294,9 +294,10 @@
             <div class="px-8 border-b border-slate-700 bg-slate-900 flex items-center overflow-x-auto flex-shrink-0">
                 <div onclick="switchTab(this, 'overview')" class="tab active px-5 py-4 text-sm font-medium cursor-pointer border-b-2 border-blue-500">Overview</div>
                 <div onclick="switchTab(this, 'signs')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Signs</div>
+                <div onclick="switchTab(this, 'shortlist')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Shortlist</div>
+                <div onclick="switchTab(this, 'proofing')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Proofing</div>
                 <div onclick="switchTab(this, 'manufacturing')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Manufacturing</div>
-                <div onclick="switchTab(this, 'confirmation')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Confirmation</div>
-                <div onclick="switchTab(this, 'approved')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Approved</div>
+                <div onclick="switchTab(this, 'confirmed')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Confirmed</div>
                 <div onclick="switchTab(this, 'invoice')" class="tab px-5 py-4 text-sm font-medium cursor-pointer text-slate-400 hover:text-slate-200">Invoice</div>
             </div>
 
@@ -412,14 +413,17 @@
 
                     <div id="sign-designs-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"></div>
                 </div>
+                <div id="tab-shortlist" class="tab-content hidden">
+                    <div id="shortlist-content"></div>
+                </div>
+                <div id="tab-proofing" class="tab-content hidden">
+                    <div id="proofing-content"></div>
+                </div>
                 <div id="tab-manufacturing" class="tab-content hidden">
                     <div id="manufacturing-content"></div>
                 </div>
-                <div id="tab-confirmation" class="tab-content hidden">
-                    <div id="confirmation-content"></div>
-                </div>
-                <div id="tab-approved" class="tab-content hidden">
-                    <div id="approved-content"></div>
+                <div id="tab-confirmed" class="tab-content hidden">
+                    <div id="confirmed-content"></div>
                 </div>
                 <div id="tab-invoice" class="tab-content hidden">
                     <div id="invoice-content"></div>
@@ -598,12 +602,12 @@
         </div>
     </div>
 
-    <!-- Manufacturing Specs Modal -->
+    <!-- Send to Proofing (Specs) Modal -->
     <div id="manufacturing-specs-modal" onclick="if (event.target.id === 'manufacturing-specs-modal') hideManufacturingSpecsModal()"
          class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
         <div onclick="event.stopImmediatePropagation()" class="bg-slate-900 w-full max-w-md rounded-3xl border border-slate-700">
             <div class="p-6">
-                <h3 class="text-xl font-semibold mb-1">Send to Manufacturing</h3>
+                <h3 class="text-xl font-semibold mb-1">Send to Proofing</h3>
                 <p id="manufacturing-specs-design-name" class="text-sm text-slate-400 mb-5"></p>
 
                 <div class="space-y-4">
@@ -630,7 +634,7 @@
             </div>
             <div class="px-6 py-5 bg-slate-950 border-t border-slate-700 flex gap-x-3 rounded-b-3xl">
                 <button onclick="hideManufacturingSpecsModal()" class="flex-1 py-3 text-sm font-medium rounded-3xl border border-slate-600 hover:bg-slate-800">Cancel</button>
-                <button onclick="confirmSendToManufacturing()" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-3xl text-sm font-semibold">Send</button>
+                <button onclick="confirmSendToProofing()" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-3xl text-sm font-semibold">Send to Proofing</button>
             </div>
         </div>
     </div>
@@ -1287,9 +1291,9 @@
                         </select>
                     </div>
                     <div class="px-3 pb-3">
-                        <button onclick="showManufacturingSpecsModal('${categoryInfo.id}', '${design.id}')"
+                        <button onclick="addDesignToShortlist('${categoryInfo.id}', '${design.id}')"
                             class="w-full py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-x-1.5">
-                            <i class="fa-solid fa-paper-plane"></i> Send to Manufacturing
+                            <i class="fa-solid fa-plus"></i> Add to Car Park
                         </button>
                     </div>
                 </div>
@@ -1354,19 +1358,31 @@
             }).join("");
         }
 
-        // ==================== MANUFACTURING, CONFIRMATION & APPROVAL ====================
+        // ==================== SHORTLIST, PROOFING, MANUFACTURING & CONFIRMED ====================
         // Each sign item moves through job.proofItems statuses:
-        //   "manufacturing" -> sent off, waiting on a photo of the physical sign
-        //   "confirmation"  -> photo uploaded, comparing against the reference design
-        //   "approved"      -> confirmed match, done
-        // Rejecting at confirmation sends it back to "manufacturing" for a re-shoot.
+        //   "shortlist"    -> picked for this car park, specs set, no design work yet
+        //   "proofing"     -> back-and-forth with the client on what the design should look like
+        //   "manufacturing"-> design locked in, sign is being physically made
+        //   "confirmed"    -> finished sign; item.installedDate gets set once it's up on site
         // Persisted to the "proofitems" jsonb column via persistProofItems().
         function getCurrentJob() {
             return jobs.find(j => j.id === currentJobId);
         }
 
+        // One-time fold-forward for items created under the old 3-stage
+        // pipeline (manufacturing -> confirmation -> approved) so nothing
+        // already in flight gets lost when the statuses were restructured.
+        // Old "confirmation" items already had a manufactured photo staged
+        // (manufacturing work was effectively done), so both it and old
+        // "approved" land in "confirmed" — just without an install date yet.
+        function migrateLegacyProofItemStatus(item) {
+            if (item.status === "confirmation" || item.status === "approved") item.status = "confirmed";
+            if (!Array.isArray(item.designRevisions)) item.designRevisions = [];
+        }
+
         function ensureProofingFields(job) {
             if (!Array.isArray(job.proofItems)) job.proofItems = [];
+            job.proofItems.forEach(migrateLegacyProofItemStatus);
         }
 
         async function persistProofItems(job) {
@@ -1387,58 +1403,22 @@
             ensureProofingFields(job);
             const total = job.proofItems.length;
             if (total === 0) return "No signs yet";
-            const approved = job.proofItems.filter(p => p.status === "approved").length;
-            return `${approved}/${total} signs approved`;
+            const installed = job.proofItems.filter(p => p.status === "confirmed" && p.installedDate).length;
+            return `${installed}/${total} signs installed`;
         }
 
         function renderAllProofTabs() {
+            renderShortlistTab();
+            renderProofingTab();
             renderManufacturingTab();
-            renderConfirmationTab();
-            renderApprovedTab();
+            renderConfirmedTab();
         }
 
-        let pendingManufacturingSend = null;
-
-        function showManufacturingSpecsModal(categoryId, designId) {
-            const design = (signDesigns[categoryId] || []).find(d => d.id === designId);
-            if (!design) return;
-            pendingManufacturingSend = { categoryId, designId };
-
-            document.getElementById("manufacturing-specs-design-name").textContent = design.name;
-            document.getElementById("manufacturing-specs-width").value = "";
-            document.getElementById("manufacturing-specs-height").value = "";
-            document.getElementById("manufacturing-specs-material").value = "Dibond";
-            document.getElementById("manufacturing-specs-quantity").value = "1";
-
-            document.getElementById("manufacturing-specs-modal").classList.remove("hidden");
-            document.getElementById("manufacturing-specs-modal").classList.add("flex");
-        }
-
-        function hideManufacturingSpecsModal() {
-            document.getElementById("manufacturing-specs-modal").classList.remove("flex");
-            document.getElementById("manufacturing-specs-modal").classList.add("hidden");
-            pendingManufacturingSend = null;
-        }
-
-        async function confirmSendToManufacturing() {
-            if (!pendingManufacturingSend) return;
-            const width = parseFloat(document.getElementById("manufacturing-specs-width").value);
-            const height = parseFloat(document.getElementById("manufacturing-specs-height").value);
-            const material = document.getElementById("manufacturing-specs-material").value;
-            const quantity = parseInt(document.getElementById("manufacturing-specs-quantity").value, 10) || 1;
-
-            if (!width || !height) {
-                showToast("Please enter both width and height");
-                return;
-            }
-
-            const { categoryId, designId } = pendingManufacturingSend;
-            hideManufacturingSpecsModal();
-            await sendDesignToManufacturing(categoryId, designId, { widthMm: width, heightMm: height, material, quantity });
-        }
-
-        // Called from a "Send to Manufacturing" button on a sign design card
-        async function sendDesignToManufacturing(categoryId, designId, specs) {
+        // Called from an "Add to Car Park" button on a sign design card.
+        // No specs yet at this point — those get set when it's sent on to
+        // Proofing (see showSendToProofingModal), since that's when the
+        // team actually needs to lock in size/material for this car park.
+        async function addDesignToShortlist(categoryId, designId) {
             const job = getCurrentJob();
             if (!job) return;
             ensureProofingFields(job);
@@ -1458,15 +1438,129 @@
                 sampleTitle: design.sampleTitle || categoryInfo.sampleTitle,
                 sampleSubtitle: design.sampleSubtitle || categoryInfo.sampleSubtitle,
                 manufacturedImage: null,
-                widthMm: specs ? specs.widthMm : null,
-                heightMm: specs ? specs.heightMm : null,
-                material: specs ? specs.material : null,
-                quantity: specs && specs.quantity ? specs.quantity : 1,
-                status: "manufacturing",
+                designRevisions: [],
+                installedDate: null,
+                widthMm: null,
+                heightMm: null,
+                material: null,
+                quantity: 1,
+                status: "shortlist",
                 comments: []
             });
 
-            showToast(categoryInfo.label + " sent to manufacturing");
+            showToast(categoryInfo.label + " added to car park");
+            renderShortlistTab();
+            await persistProofItems(job);
+        }
+
+        let pendingSendToProofing = null;
+
+        // Called from "Send to Proofing" on a Shortlist card — this is the
+        // point where size/material/quantity get set for this sign.
+        function showSendToProofingModal(itemId) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+            pendingSendToProofing = itemId;
+
+            document.getElementById("manufacturing-specs-design-name").textContent = item.name;
+            document.getElementById("manufacturing-specs-width").value = item.widthMm || "";
+            document.getElementById("manufacturing-specs-height").value = item.heightMm || "";
+            document.getElementById("manufacturing-specs-material").value = item.material || "Dibond";
+            document.getElementById("manufacturing-specs-quantity").value = item.quantity || "1";
+
+            document.getElementById("manufacturing-specs-modal").classList.remove("hidden");
+            document.getElementById("manufacturing-specs-modal").classList.add("flex");
+        }
+
+        function hideManufacturingSpecsModal() {
+            document.getElementById("manufacturing-specs-modal").classList.remove("flex");
+            document.getElementById("manufacturing-specs-modal").classList.add("hidden");
+            pendingSendToProofing = null;
+        }
+
+        async function confirmSendToProofing() {
+            if (!pendingSendToProofing) return;
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === pendingSendToProofing);
+            if (!item) return;
+
+            const width = parseFloat(document.getElementById("manufacturing-specs-width").value);
+            const height = parseFloat(document.getElementById("manufacturing-specs-height").value);
+            const material = document.getElementById("manufacturing-specs-material").value;
+            const quantity = parseInt(document.getElementById("manufacturing-specs-quantity").value, 10) || 1;
+
+            if (!width || !height) {
+                showToast("Please enter both width and height");
+                return;
+            }
+
+            item.widthMm = width;
+            item.heightMm = height;
+            item.material = material;
+            item.quantity = quantity;
+            item.status = "proofing";
+
+            hideManufacturingSpecsModal();
+            showToast(item.name + " sent to proofing");
+            renderAllProofTabs();
+            await persistProofItems(job);
+        }
+
+        // ==================== SHORTLIST TAB ====================
+        function renderShortlistTab() {
+            const container = document.getElementById("shortlist-content");
+            if (!container) return;
+            const job = getCurrentJob();
+            if (!job) return;
+            ensureProofingFields(job);
+
+            const items = job.proofItems.filter(p => p.status === "shortlist");
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-list-check text-4xl mb-3"></i>
+                        <p>No signs shortlisted yet</p>
+                        <p class="text-sm mt-1">Go to the Signs tab and click "Add to Car Park" on a design.</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">` +
+                items.map(item => buildShortlistItemHTML(item)).join("") +
+                `</div>`;
+        }
+
+        function buildShortlistItemHTML(item) {
+            return `
+                <div class="detail-card rounded-2xl overflow-hidden">
+                    ${buildReferencePreviewHTML(item, 130)}
+                    <div class="px-4 py-2.5 border-b border-slate-700">
+                        <span class="text-xs font-medium">${item.categoryLabel} — ${item.name}</span>
+                    </div>
+                    <div class="p-4 flex items-center gap-x-2">
+                        <button onclick="removeFromShortlist('${item.id}')" class="flex-1 py-2.5 bg-red-950 hover:bg-red-900 text-red-400 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-1.5">
+                            <i class="fa-solid fa-xmark"></i> Remove
+                        </button>
+                        <button onclick="showSendToProofingModal('${item.id}')" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-1.5">
+                            <i class="fa-solid fa-paper-plane"></i> Send to Proofing
+                        </button>
+                    </div>
+                </div>`;
+        }
+
+        async function removeFromShortlist(itemId) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+
+            job.proofItems = job.proofItems.filter(p => p.id !== itemId);
+            showToast(item.name + " removed from shortlist");
+            renderAllProofTabs();
             await persistProofItems(job);
         }
 
@@ -1490,11 +1584,20 @@
             await persistProofItems(job);
         }
 
-        // Called when the sign guy's photo of the physical sign comes in
-        // Only stages the photo — status stays "manufacturing" so it shows
-        // up side-by-side with the reference for a sanity check before the
-        // person explicitly sends it on (see sendItemToConfirmation).
-        async function uploadManufacturedPhoto(itemId, file) {
+        // Returns whatever the team should currently be looking at for a
+        // sign's design: the latest uploaded revision if one exists during
+        // proofing, otherwise the original reference design from the library.
+        function getCurrentDesignImage(item) {
+            if (item.designRevisions && item.designRevisions.length > 0) {
+                return item.designRevisions[item.designRevisions.length - 1].image;
+            }
+            return item.image;
+        }
+
+        // Uploads a new proposed look during Proofing. Doesn't overwrite
+        // anything — each upload is added to designRevisions so the whole
+        // back-and-forth with the client stays visible in the timeline.
+        async function addDesignRevision(itemId, file) {
             if (!file) return;
             const job = getCurrentJob();
             if (!job) return;
@@ -1502,62 +1605,104 @@
             if (!item) return;
 
             try {
-                item.manufacturedImage = await readFileAsDataUrl(file);
-                renderManufacturingTab();
-                showToast(item.name + " photo added — check it, then send to confirmation");
+                const image = await readFileAsDataUrl(file);
+                if (!Array.isArray(item.designRevisions)) item.designRevisions = [];
+                item.designRevisions.push({
+                    image: image,
+                    author: currentUserName || "Anonymous",
+                    timestamp: new Date().toLocaleString()
+                });
+                renderProofingTab();
+                showToast(item.name + " — new design uploaded");
                 await persistProofItems(job);
             } catch (err) {
-                showToast("Couldn't read that photo, try again");
+                showToast("Couldn't read that image, try again");
             }
         }
 
-        async function sendItemToConfirmation(itemId) {
-            const job = getCurrentJob();
-            if (!job) return;
-            const item = job.proofItems.find(p => p.id === itemId);
-            if (!item || !item.manufacturedImage) return;
-
-            item.status = "confirmation";
-            renderAllProofTabs();
-            showToast(item.name + " sent for confirmation");
-            await persistProofItems(job);
-        }
-
-        async function confirmSignMatch(itemId) {
+        // The boss has signed off on the current design — locks it in and
+        // sends it to be physically made.
+        async function approveDesign(itemId) {
             const job = getCurrentJob();
             if (!job) return;
             const item = job.proofItems.find(p => p.id === itemId);
             if (!item) return;
 
-            item.status = "approved";
-            showToast(item.name + " approved!");
-            renderAllProofTabs();
-            await persistProofItems(job);
-        }
-
-        // The manufactured photo didn't match the reference — back for a re-shoot
-        async function rejectManufacturedPhoto(itemId) {
-            const job = getCurrentJob();
-            if (!job) return;
-            const item = job.proofItems.find(p => p.id === itemId);
-            if (!item) return;
-
-            item.manufacturedImage = null;
             item.status = "manufacturing";
+            showToast(item.name + " approved — sent to manufacturing");
+            renderAllProofTabs();
+            await persistProofItems(job);
+        }
+
+        // Pulls a sign back out of manufacturing — e.g. sent by mistake, or
+        // plans changed. Keeps everything (specs, comments, design history)
+        // and just drops it back to Shortlist rather than destroying it.
+        async function deleteSignFromManufacturing(itemId) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+
+            if (!confirm(`Remove "${item.name}" from manufacturing? It'll go back to the Shortlist and won't be in production anymore.`)) return;
+
+            item.status = "shortlist";
+            showToast(item.name + " sent back to shortlist");
+            renderAllProofTabs();
+            await persistProofItems(job);
+        }
+
+        async function markManufacturingComplete(itemId) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+
+            item.status = "confirmed";
+            renderAllProofTabs();
+            showToast(item.name + " marked complete");
+            await persistProofItems(job);
+        }
+
+        // Something was wrong with the finished sign after all — back to
+        // manufacturing for a re-make (keeps the photo so it's easy to see
+        // what needs fixing).
+        async function sendConfirmedBackToManufacturing(itemId) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+
+            item.status = "manufacturing";
+            item.installedDate = null;
             showToast(item.name + " sent back to manufacturing");
             renderAllProofTabs();
             await persistProofItems(job);
         }
 
-        async function unapproveSign(itemId) {
+        async function markItemInstalled(itemId) {
             const job = getCurrentJob();
             if (!job) return;
             const item = job.proofItems.find(p => p.id === itemId);
             if (!item) return;
 
-            item.status = "confirmation";
-            showToast(item.name + " unapproved — back to confirmation");
-            renderAllProofTabs();
+            const input = document.getElementById("install-date-" + itemId);
+            const dateValue = input && input.value ? input.value : new Date().toISOString().split("T")[0];
+
+            item.installedDate = dateValue;
+            showToast(item.name + " marked installed");
+            renderConfirmedTab();
+            await persistProofItems(job);
+        }
+
+        async function unmarkItemInstalled(itemId) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+
+            item.installedDate = null;
+            showToast(item.name + " marked as not yet installed");
+            renderConfirmedTab();
             await persistProofItems(job);
         }
 
@@ -1581,6 +1726,56 @@
                 <div class="section-label mb-2">COMMENTS &amp; CHANGES</div>
                 <div class="space-y-1.5 mb-3">
                     ${renderCommentsListHTML(item.comments)}
+                </div>
+                <div class="flex items-center gap-x-2 mb-3">
+                    <input id="proof-comment-input-${item.id}" type="text" placeholder="Note an issue or requested change..."
+                        class="input-dark flex-1 rounded-xl px-3 py-2 text-xs"
+                        onkeydown="if(event.key==='Enter'){addProofComment('${item.id}');}">
+                    <button onclick="addProofComment('${item.id}')" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold whitespace-nowrap">
+                        Comment
+                    </button>
+                </div>`;
+        }
+
+        // Proofing needs more than a flat comment list — the whole point is
+        // seeing design revisions and the chat about them in the order they
+        // actually happened, so everyone can follow how the design got here.
+        function buildProofingTimelineHTML(item) {
+            const commentEvents = (item.comments || []).map(c => ({ type: "comment", author: c.author, timestamp: c.timestamp, text: c.text }));
+            const revisionEvents = (item.designRevisions || []).map((r, i) => ({ type: "revision", author: r.author, timestamp: r.timestamp, index: i + 1, image: r.image }));
+            const events = commentEvents.concat(revisionEvents).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+            if (events.length === 0) {
+                return `<p class="text-sm text-slate-500 text-center py-3">No activity yet — upload a proposed design or leave a comment.</p>`;
+            }
+
+            return events.map(e => {
+                if (e.type === "revision") {
+                    return `
+                        <div class="bg-slate-950 rounded-2xl px-4 py-3">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-semibold"><i class="fa-solid fa-image mr-1.5 text-blue-400"></i>${e.author} uploaded design v${e.index}</span>
+                                <span class="text-xs text-slate-500">${e.timestamp}</span>
+                            </div>
+                            <img src="${e.image}" alt="Design revision ${e.index}" class="rounded-xl w-full max-w-[200px] object-cover" style="max-height:140px;">
+                        </div>`;
+                }
+                return `
+                    <div class="bg-slate-950 rounded-2xl px-4 py-3">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-sm font-semibold">${e.author}</span>
+                            <span class="text-xs text-slate-500">${e.timestamp}</span>
+                        </div>
+                        <p class="text-sm text-slate-300">${e.text}</p>
+                    </div>`;
+            }).join("");
+        }
+
+        function buildProofingSectionHTML(item) {
+            return `
+                <div class="section-label mb-2">DESIGN &amp; COMMENTS</div>
+                <div class="space-y-1.5 mb-3">
+                    ${buildProofingTimelineHTML(item)}
                 </div>
                 <div class="flex items-center gap-x-2 mb-3">
                     <input id="proof-comment-input-${item.id}" type="text" placeholder="Note an issue or requested change..."
@@ -1631,83 +1826,136 @@
                 </div>`;
         }
 
-        function buildManufacturingItemHTML(item) {
-            const hasPhoto = !!item.manufacturedImage;
-            const previewSection = hasPhoto ? `
-                <div class="grid grid-cols-2">
-                    <div>
-                        <div class="text-[10px] font-semibold text-slate-400 text-center py-1 bg-slate-950">REFERENCE DESIGN</div>
-                        ${buildReferencePreviewHTML(item, 110)}
-                    </div>
-                    <div>
-                        <div class="text-[10px] font-semibold text-slate-400 text-center py-1 bg-slate-950">MANUFACTURED PHOTO</div>
-                        ${buildManufacturedPreviewHTML(item, 110)}
-                    </div>
-                </div>` : buildReferencePreviewHTML(item, 130);
+        // Shows whatever the current, locked-in design is (latest proofing
+        // revision, or the original library image if it was approved as-is).
+        // Used everywhere AFTER proofing — Manufacturing and Confirmed don't
+        // care about the design history, just the final answer.
+        function buildApprovedDesignPreviewHTML(item, heightPx, cornerClass) {
+            const currentImage = getCurrentDesignImage(item);
+            const viewItem = Object.assign({}, item, { image: currentImage });
+            const inner = buildSignPreviewHTML(viewItem, item.categoryIcon, heightPx);
+            return wrapWithExpand(inner, !!currentImage, cornerClass || "top-2 right-2");
+        }
 
+        // Proofing-only: specs are still editable here (unlike the read-only
+        // row shown once a sign reaches Manufacturing) since the boss might
+        // ask for a size or material change during the back-and-forth.
+        function buildEditableSpecsHTML(item) {
+            return `
+                <div class="px-4 py-3 bg-slate-950/50 border-b border-slate-700">
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <input type="number" min="1" placeholder="Width (mm)" value="${item.widthMm || ""}"
+                            onchange="updateProofingSpec('${item.id}', 'widthMm', this.value)"
+                            class="input-dark rounded-lg px-2.5 py-1.5 text-xs">
+                        <input type="number" min="1" placeholder="Height (mm)" value="${item.heightMm || ""}"
+                            onchange="updateProofingSpec('${item.id}', 'heightMm', this.value)"
+                            class="input-dark rounded-lg px-2.5 py-1.5 text-xs">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <select onchange="updateProofingSpec('${item.id}', 'material', this.value)" class="input-dark rounded-lg px-2.5 py-1.5 text-xs">
+                            <option value="Dibond" ${item.material === "Dibond" ? "selected" : ""}>Dibond</option>
+                            <option value="Corflute" ${item.material === "Corflute" ? "selected" : ""}>Corflute</option>
+                        </select>
+                        <input type="number" min="1" step="1" placeholder="Qty" value="${item.quantity || 1}"
+                            onchange="updateProofingSpec('${item.id}', 'quantity', this.value)"
+                            class="input-dark rounded-lg px-2.5 py-1.5 text-xs">
+                    </div>
+                </div>`;
+        }
+
+        async function updateProofingSpec(itemId, field, value) {
+            const job = getCurrentJob();
+            if (!job) return;
+            const item = job.proofItems.find(p => p.id === itemId);
+            if (!item) return;
+
+            if (field === "widthMm" || field === "heightMm") {
+                item[field] = parseFloat(value) || null;
+            } else if (field === "quantity") {
+                item[field] = parseInt(value, 10) || 1;
+            } else {
+                item[field] = value;
+            }
+            await persistProofItems(job);
+        }
+
+        // Proofing-only: shows an explicit empty state instead of falling
+        // back to the original design, so it's obvious no proposal has been
+        // uploaded yet rather than looking like the original IS the proposal.
+        function buildLatestProposalPreviewHTML(item, heightPx) {
+            if (!item.designRevisions || item.designRevisions.length === 0) {
+                return `<div class="flex items-center justify-center bg-slate-950 text-slate-600" style="height:${heightPx}px;">
+                            <i class="fa-solid fa-image text-xl"></i>
+                        </div>`;
+            }
+            const latest = item.designRevisions[item.designRevisions.length - 1];
+            const inner = `<img src="${latest.image}" alt="Latest proposal" class="w-full object-cover block" style="height:${heightPx}px;">`;
+            return wrapWithExpand(inner, true, "top-2 right-2");
+        }
+
+        function buildManufacturingItemHTML(item) {
             return `
                 <div class="detail-card rounded-2xl overflow-hidden">
-                    ${previewSection}
+                    ${buildApprovedDesignPreviewHTML(item, 130)}
                     <div class="px-4 py-2.5 border-b border-slate-700">
                         <span class="text-xs font-medium">${item.categoryLabel} — ${item.name}</span>
                     </div>
                     ${buildSpecsRowHTML(item)}
                     <div class="p-4">
                         ${buildCommentSectionHTML(item)}
-                        <label class="block cursor-pointer mb-2">
-                            <span class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2">
-                                <i class="fa-solid fa-camera"></i> ${hasPhoto ? "Replace Photo" : "Upload Photo of Manufactured Sign"}
-                            </span>
-                            <input type="file" accept="image/*" class="hidden" onchange="uploadManufacturedPhoto('${item.id}', this.files[0])">
-                        </label>
-                        ${hasPhoto ? `
-                            <button onclick="sendItemToConfirmation('${item.id}')" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2">
-                                <i class="fa-solid fa-paper-plane"></i> Send to Confirmation
-                            </button>` : ""}
+                        <button onclick="markManufacturingComplete('${item.id}')" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2 mb-2">
+                            <i class="fa-solid fa-check"></i> Mark Complete
+                        </button>
+                        <button onclick="deleteSignFromManufacturing('${item.id}')" class="w-full py-2.5 bg-red-950 hover:bg-red-900 text-red-400 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2">
+                            <i class="fa-solid fa-trash"></i> Delete
+                        </button>
                     </div>
                 </div>`;
         }
 
-        function buildConfirmationItemHTML(item) {
+        function buildProofingItemHTML(item) {
+            const revisionCount = item.designRevisions ? item.designRevisions.length : 0;
             return `
                 <div class="detail-card rounded-2xl overflow-hidden">
                     <div class="grid grid-cols-2 gap-px bg-slate-700">
                         <div class="bg-slate-900">
-                            <div class="text-[10px] font-semibold text-slate-400 text-center py-1.5 bg-slate-950">REFERENCE DESIGN</div>
+                            <div class="text-[10px] font-semibold text-slate-400 text-center py-1.5 bg-slate-950">ORIGINAL DESIGN</div>
                             ${buildReferencePreviewHTML(item, 150)}
                         </div>
                         <div class="bg-slate-900">
-                            <div class="text-[10px] font-semibold text-slate-400 text-center py-1.5 bg-slate-950">MANUFACTURED PHOTO</div>
-                            ${buildManufacturedPreviewHTML(item, 150)}
+                            <div class="text-[10px] font-semibold text-slate-400 text-center py-1.5 bg-slate-950">${revisionCount > 0 ? `LATEST PROPOSAL (v${revisionCount})` : "NO PROPOSAL YET"}</div>
+                            ${buildLatestProposalPreviewHTML(item, 150)}
                         </div>
                     </div>
                     <div class="px-4 py-2.5 border-b border-slate-700">
                         <span class="text-xs font-medium">${item.categoryLabel} — ${item.name}</span>
                     </div>
-                    ${buildSpecsRowHTML(item)}
+                    ${buildEditableSpecsHTML(item)}
                     <div class="p-4">
-                        ${buildCommentSectionHTML(item)}
-                        <div class="flex items-center gap-x-2">
-                            <button onclick="rejectManufacturedPhoto('${item.id}')" class="flex-1 py-2.5 bg-red-950 hover:bg-red-900 text-red-400 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-1.5">
-                                <i class="fa-solid fa-xmark"></i> Doesn't Match
-                            </button>
-                            <button onclick="confirmSignMatch('${item.id}')" class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-1.5">
-                                <i class="fa-solid fa-check"></i> Confirm Match
-                            </button>
-                        </div>
+                        ${buildProofingSectionHTML(item)}
+                        <label class="block cursor-pointer mb-2">
+                            <span class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2">
+                                <i class="fa-solid fa-upload"></i> Upload New Design
+                            </span>
+                            <input type="file" accept="image/*" class="hidden" onchange="addDesignRevision('${item.id}', this.files[0])">
+                        </label>
+                        <button onclick="approveDesign('${item.id}')" class="w-full py-2.5 bg-green-600 hover:bg-green-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2">
+                            <i class="fa-solid fa-check"></i> Approve Design
+                        </button>
                     </div>
                 </div>`;
         }
 
-        function buildApprovedItemHTML(item) {
+        function buildConfirmedItemHTML(item) {
             const cornerClass = "top-2 left-2";
+            const isInstalled = !!item.installedDate;
             return `
                 <div class="detail-card rounded-2xl overflow-hidden">
                     <div class="relative">
-                        <div class="absolute top-2 right-2 bg-green-600 text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-x-1 z-10">
-                            <i class="fa-solid fa-check"></i> Approved
+                        <div class="absolute top-2 right-2 ${isInstalled ? "bg-green-600" : "bg-slate-700"} text-white text-[10px] font-semibold px-2.5 py-1 rounded-full flex items-center gap-x-1 z-10">
+                            <i class="fa-solid ${isInstalled ? "fa-check" : "fa-clock"}"></i> ${isInstalled ? "Installed" : "Ready"}
                         </div>
-                        ${item.manufacturedImage ? buildManufacturedPreviewHTML(item, 130, cornerClass) : buildReferencePreviewHTML(item, 130, cornerClass)}
+                        ${item.manufacturedImage ? buildManufacturedPreviewHTML(item, 130, cornerClass) : buildApprovedDesignPreviewHTML(item, 130, cornerClass)}
                     </div>
                     <div class="px-4 py-2.5 border-b border-slate-700">
                         <span class="text-xs font-medium">${item.categoryLabel} — ${item.name}</span>
@@ -1715,8 +1963,19 @@
                     ${buildSpecsRowHTML(item)}
                     <div class="p-4">
                         ${buildCommentSectionHTML(item)}
-                        <button onclick="unapproveSign('${item.id}')" class="w-full py-2.5 bg-red-950 hover:bg-red-900 text-red-400 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2">
-                            <i class="fa-solid fa-rotate-left"></i> Unapprove Sign
+                        ${isInstalled ? `
+                            <div class="text-xs text-slate-400 mb-2 text-center">Installed on ${item.installedDate}</div>
+                            <button onclick="unmarkItemInstalled('${item.id}')" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2 mb-2">
+                                <i class="fa-solid fa-rotate-left"></i> Not Installed Yet
+                            </button>` : `
+                            <div class="flex items-center gap-x-2 mb-2">
+                                <input id="install-date-${item.id}" type="date" class="input-dark flex-1 rounded-xl px-3 py-2 text-xs">
+                                <button onclick="markItemInstalled('${item.id}')" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-xl font-semibold text-xs whitespace-nowrap">
+                                    Mark Installed
+                                </button>
+                            </div>`}
+                        <button onclick="sendConfirmedBackToManufacturing('${item.id}')" class="w-full py-2.5 bg-red-950 hover:bg-red-900 text-red-400 rounded-xl font-semibold text-xs flex items-center justify-center gap-x-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Issue Found — Back to Manufacturing
                         </button>
                     </div>
                 </div>`;
@@ -1736,7 +1995,7 @@
                     <div class="text-center py-12 text-slate-400">
                         <i class="fa-solid fa-industry text-4xl mb-3"></i>
                         <p>No signs in manufacturing</p>
-                        <p class="text-sm mt-1">Go to the Signs tab and click "Send to Manufacturing" on a design.</p>
+                        <p class="text-sm mt-1">Signs show up here once their design is approved in Proofing.</p>
                     </div>`;
                 return;
             }
@@ -1746,50 +2005,50 @@
                 `</div>`;
         }
 
-        function renderConfirmationTab() {
-            const container = document.getElementById("confirmation-content");
+        function renderProofingTab() {
+            const container = document.getElementById("proofing-content");
             if (!container) return;
             const job = getCurrentJob();
             if (!job) return;
             ensureProofingFields(job);
 
-            const items = job.proofItems.filter(p => p.status === "confirmation");
+            const items = job.proofItems.filter(p => p.status === "proofing");
 
             if (items.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-12 text-slate-400">
-                        <i class="fa-solid fa-magnifying-glass text-4xl mb-3"></i>
-                        <p>No signs awaiting confirmation</p>
-                        <p class="text-sm mt-1">Signs show up here once a manufactured photo has been uploaded.</p>
+                        <i class="fa-solid fa-comments text-4xl mb-3"></i>
+                        <p>No signs in proofing</p>
+                        <p class="text-sm mt-1">Go to the Shortlist tab and click "Send to Proofing" on a sign.</p>
                     </div>`;
                 return;
             }
 
             container.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">` +
-                items.map(item => buildConfirmationItemHTML(item)).join("") +
+                items.map(item => buildProofingItemHTML(item)).join("") +
                 `</div>`;
         }
 
-        function renderApprovedTab() {
-            const container = document.getElementById("approved-content");
+        function renderConfirmedTab() {
+            const container = document.getElementById("confirmed-content");
             if (!container) return;
             const job = getCurrentJob();
             if (!job) return;
             ensureProofingFields(job);
 
-            const approvedItems = job.proofItems.filter(p => p.status === "approved");
+            const confirmedItems = job.proofItems.filter(p => p.status === "confirmed");
 
-            if (approvedItems.length === 0) {
+            if (confirmedItems.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-12 text-slate-400">
                         <i class="fa-solid fa-circle-check text-4xl mb-3"></i>
-                        <p>No signs approved yet</p>
+                        <p>No finished signs yet</p>
                     </div>`;
                 return;
             }
 
             container.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">` +
-                approvedItems.map(item => buildApprovedItemHTML(item)).join("") +
+                confirmedItems.map(item => buildConfirmedItemHTML(item)).join("") +
                 `</div>`;
         }
 
@@ -1801,19 +2060,19 @@
             if (!job) return;
             ensureProofingFields(job);
 
-            const approvedItems = job.proofItems.filter(p => p.status === "approved");
+            const installedItems = job.proofItems.filter(p => p.status === "confirmed" && p.installedDate);
 
-            if (approvedItems.length === 0) {
+            if (installedItems.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-12 text-slate-400">
                         <i class="fa-solid fa-file-invoice-dollar text-4xl mb-3"></i>
-                        <p>No approved signs yet</p>
-                        <p class="text-sm mt-1">An invoice can be generated once at least one sign is approved.</p>
+                        <p>No installed signs yet</p>
+                        <p class="text-sm mt-1">An invoice can be generated once at least one sign is marked installed.</p>
                     </div>`;
                 return;
             }
 
-            const total = approvedItems.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (item.quantity || 1)), 0);
+            const total = installedItems.reduce((sum, item) => sum + ((parseFloat(item.price) || 0) * (item.quantity || 1)), 0);
             const navLogo = document.querySelector('nav img[alt="PriPark"]');
             const logoSrc = navLogo ? navLogo.src : "";
 
@@ -1856,7 +2115,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            ${approvedItems.map(item => `
+                            ${installedItems.map(item => `
                                 <tr class="border-b border-slate-100">
                                     <td class="py-2.5">${escapeHtml(item.name)}</td>
                                     <td class="py-2.5">${escapeHtml(item.categoryLabel || "")}</td>
@@ -1893,8 +2152,8 @@
             const lineTotalEl = document.getElementById(`invoice-line-total-${item.id}`);
             if (lineTotalEl) lineTotalEl.textContent = `$${((parseFloat(item.price) || 0) * (item.quantity || 1)).toFixed(2)}`;
 
-            const approvedItems = job.proofItems.filter(p => p.status === "approved");
-            const total = approvedItems.reduce((sum, i) => sum + ((parseFloat(i.price) || 0) * (i.quantity || 1)), 0);
+            const installedItems = job.proofItems.filter(p => p.status === "confirmed" && p.installedDate);
+            const total = installedItems.reduce((sum, i) => sum + ((parseFloat(i.price) || 0) * (i.quantity || 1)), 0);
             const totalEl = document.getElementById("invoice-total");
             if (totalEl) totalEl.textContent = `$${total.toFixed(2)}`;
 
@@ -2428,23 +2687,23 @@
             const wrap = document.getElementById("payment-cta-wrap");
             if (!wrap || !job) return;
 
-            const allApproved = job.proofItems && job.proofItems.length > 0 && job.proofItems.every(p => p.status === "approved");
+            const allInstalled = job.proofItems && job.proofItems.length > 0 && job.proofItems.every(p => p.status === "confirmed" && p.installedDate);
 
             if (job.isPaid) {
                 wrap.innerHTML = `
                     <div class="flex items-center gap-x-2 text-green-500 text-sm font-semibold">
                         <i class="fa-solid fa-circle-check"></i> Paid
                     </div>`;
-            } else if (allApproved && job.paymentLink) {
+            } else if (allInstalled && job.paymentLink) {
                 wrap.innerHTML = `
                     <a href="${escapeHtml(job.paymentLink)}" target="_blank" rel="noopener noreferrer"
                         class="inline-flex items-center gap-x-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-3xl font-semibold text-sm">
                         <i class="fa-solid fa-credit-card"></i> Pay Now
                     </a>`;
-            } else if (allApproved) {
-                wrap.innerHTML = `<p class="text-sm text-slate-500">All signs are approved — add a payment link above so the client can pay.</p>`;
+            } else if (allInstalled) {
+                wrap.innerHTML = `<p class="text-sm text-slate-500">All signs are installed — add a payment link above so the client can pay.</p>`;
             } else {
-                wrap.innerHTML = `<p class="text-sm text-slate-500">A payment link will be ready to share once every sign on this job is approved.</p>`;
+                wrap.innerHTML = `<p class="text-sm text-slate-500">A payment link will be ready to share once every sign on this job is installed.</p>`;
             }
         }
 
@@ -2467,14 +2726,17 @@
                 renderSignCatTabsUI();
                 renderSignDesignsUI();
             }
+            if (tabName === "shortlist") {
+                renderShortlistTab();
+            }
+            if (tabName === "proofing") {
+                renderProofingTab();
+            }
             if (tabName === "manufacturing") {
                 renderManufacturingTab();
             }
-            if (tabName === "confirmation") {
-                renderConfirmationTab();
-            }
-            if (tabName === "approved") {
-                renderApprovedTab();
+            if (tabName === "confirmed") {
+                renderConfirmedTab();
             }
             if (tabName === "invoice") {
                 renderInvoiceTab();
