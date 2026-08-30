@@ -181,6 +181,13 @@
                         <span id="chat-unread-badge" class="hidden ml-1.5 px-2 py-0.5 bg-blue-600 rounded-full text-xs font-mono">0</span>
                     </button>
 
+                    <!-- Sign Library Button -->
+                    <button onclick="showSignLibraryModal()"
+                            class="flex items-center gap-x-2 px-4 py-2 rounded-3xl text-sm font-medium bg-slate-800 hover:bg-slate-700 transition-colors">
+                        <i class="fa-solid fa-images"></i>
+                        <span>Sign Library</span>
+                    </button>
+
                     <!-- Archive Button -->
                     <button onclick="showArchiveModal()"
                             class="flex items-center gap-x-2 px-4 py-2 rounded-3xl text-sm font-medium bg-slate-800 hover:bg-slate-700 transition-colors">
@@ -188,7 +195,7 @@
                         <span>Archive</span>
                         <span id="archive-count" class="ml-1.5 px-2 py-0.5 bg-slate-700 rounded-full text-xs font-mono">0</span>
                     </button>
-                    
+
                     <button onclick="exportAllData()" title="Download a backup of all data"
                             class="flex items-center justify-center px-3 py-2 rounded-3xl text-sm font-medium bg-slate-800 hover:bg-slate-700 transition-colors">
                         <i class="fa-solid fa-download"></i>
@@ -214,27 +221,27 @@
 
         <!-- Stats -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-10">
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+            <div class="stat-tile bg-slate-900 border border-slate-800 rounded-3xl p-5 cursor-pointer hover:border-slate-600 transition-colors" data-filter="active" onclick="filterJobs('active')">
                 <div class="text-3xl font-semibold tabular-nums" id="stat-active">0</div>
                 <div class="text-sm text-slate-400 mt-1">Active Jobs</div>
             </div>
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+            <div class="stat-tile bg-slate-900 border border-slate-800 rounded-3xl p-5 cursor-pointer hover:border-slate-600 transition-colors" data-filter="shortlist" onclick="filterJobs('shortlist')">
                 <div class="text-3xl font-semibold tabular-nums" id="stat-proof">0</div>
-                <div class="text-sm text-slate-400 mt-1">Waiting for Proof</div>
+                <div class="text-sm text-slate-400 mt-1">Shortlist</div>
             </div>
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+            <div class="stat-tile bg-slate-900 border border-slate-800 rounded-3xl p-5 cursor-pointer hover:border-slate-600 transition-colors" data-filter="proofing" onclick="filterJobs('proofing')">
                 <div class="text-3xl font-semibold tabular-nums" id="stat-approval">0</div>
-                <div class="text-sm text-slate-400 mt-1">Waiting for Approval</div>
+                <div class="text-sm text-slate-400 mt-1">Proofing</div>
             </div>
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+            <div class="stat-tile bg-slate-900 border border-slate-800 rounded-3xl p-5 cursor-pointer hover:border-slate-600 transition-colors" data-filter="manufacturing" onclick="filterJobs('manufacturing')">
                 <div class="text-3xl font-semibold tabular-nums" id="stat-manufacturing">0</div>
                 <div class="text-sm text-slate-400 mt-1">Manufacturing</div>
             </div>
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+            <div class="stat-tile bg-slate-900 border border-slate-800 rounded-3xl p-5 cursor-pointer hover:border-slate-600 transition-colors" data-filter="ready" onclick="filterJobs('ready')">
                 <div class="text-3xl font-semibold tabular-nums" id="stat-ready">0</div>
                 <div class="text-sm text-slate-400 mt-1">Ready to Install</div>
             </div>
-            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+            <div class="stat-tile bg-slate-900 border border-slate-800 rounded-3xl p-5 cursor-pointer hover:border-slate-600 transition-colors" data-filter="completed" onclick="filterJobs('completed')">
                 <div class="text-3xl font-semibold tabular-nums" id="stat-completed">0</div>
                 <div class="text-sm text-slate-400 mt-1">Completed</div>
             </div>
@@ -515,6 +522,50 @@
     </button>
 
     <!-- Archive Modal -->
+    <!-- Sign Library Modal -->
+    <div id="sign-library-modal" onclick="if (event.target.id === 'sign-library-modal') hideSignLibraryModal()"
+         class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div onclick="event.stopImmediatePropagation()"
+             class="bg-slate-900 w-full max-w-6xl rounded-3xl border border-slate-700 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+
+            <div class="px-8 py-5 border-b border-slate-700 flex items-center justify-between bg-slate-950 flex-shrink-0">
+                <h3 class="text-xl font-semibold flex items-center gap-x-3">
+                    <i class="fa-solid fa-images text-slate-400"></i>
+                    Sign Library
+                </h3>
+                <button onclick="hideSignLibraryModal()"
+                        class="px-5 py-2 text-sm font-medium bg-slate-800 hover:bg-slate-700 rounded-2xl transition-colors">
+                    Close
+                </button>
+            </div>
+
+            <div class="overflow-y-auto flex-1 p-6">
+                <div id="lib-cat-tabs" class="flex items-center gap-x-1 border-b border-slate-700 mb-5 overflow-x-auto">
+                    <!-- Populated by JavaScript -->
+                </div>
+
+                <div class="flex items-center gap-x-3 mb-5">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                        <input type="text" id="lib-search-input" oninput="handleLibrarySearch(this.value)"
+                            placeholder="Search designs..."
+                            class="input-dark w-full pl-9 pr-3 py-2.5 rounded-2xl text-sm">
+                    </div>
+                    <label id="lib-favorites-only-label" class="flex items-center gap-x-2 text-sm text-slate-400 cursor-pointer select-none whitespace-nowrap">
+                        <input type="checkbox" id="lib-favorites-only" onchange="handleLibraryFavoritesToggle(this.checked)">
+                        Favourites only
+                    </label>
+                    <button onclick="showAddSignDesignModal(libraryCategory)"
+                        class="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-2xl text-sm font-semibold flex items-center gap-x-2 whitespace-nowrap">
+                        <i class="fa-solid fa-plus"></i> Add Design
+                    </button>
+                </div>
+
+                <div id="lib-designs-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="archive-modal" onclick="if (event.target.id === 'archive-modal') hideArchiveModal()"
          class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
         <div onclick="event.stopImmediatePropagation()"
@@ -823,6 +874,13 @@
         let signSearchQuery = "";
         let showFavoritesOnly = false;
 
+        // Standalone Sign Library modal — same underlying data, its own
+        // independent tab/search/favourites state so it doesn't interfere
+        // with whatever's selected in a job's own Signs tab.
+        let libraryCategory = ALL_SIGNS_TAB.id;
+        let librarySearchQuery = "";
+        let libraryShowFavoritesOnly = false;
+
         // ==================== SIGN DESIGN PERSISTENCE ====================
         // The sign gallery is a single shared library across every car park
         // (not per-job), backed by a "sign_designs" table:
@@ -932,6 +990,7 @@
                 design.categoryId = categoryId;
                 archivedSignDesigns.push(design);
                 renderSignDesignsUI();
+                renderLibraryDesignsUI();
                 updateArchiveCount();
                 showToast("Design archived");
             } catch (err) {
@@ -954,6 +1013,7 @@
                 signDesigns[design.categoryId].push(design);
                 renderArchiveSignsList();
                 renderSignDesignsUI();
+                renderLibraryDesignsUI();
                 updateArchiveCount();
                 showToast("Design restored");
             } catch (err) {
@@ -1023,6 +1083,7 @@
             if (!design) return;
             design.isFavorite = !design.isFavorite;
             renderSignDesignsUI();
+            renderLibraryDesignsUI();
             showToast(design.isFavorite ? "Added to favourites" : "Removed from favourites");
             persistDesignUpdate(design.id, { is_favorite: design.isFavorite });
         }
@@ -1039,13 +1100,14 @@
             signDesigns[toCategoryId] = signDesigns[toCategoryId] || [];
             signDesigns[toCategoryId].push(design);
             renderSignDesignsUI();
+            renderLibraryDesignsUI();
 
             const newCat = SIGN_CATEGORIES.find(c => c.id === toCategoryId);
             showToast(`Moved to ${newCat ? newCat.label : toCategoryId}`);
             persistDesignUpdate(designId, { category_id: toCategoryId });
         }
 
-        function showAddSignDesignModal() {
+        function showAddSignDesignModal(sourceCategory) {
             document.getElementById("design-modal-category-label").textContent =
                 "AI picks a starting category from the sign name — check as many as apply.";
             document.getElementById("design-name-input").value = "";
@@ -1054,12 +1116,13 @@
             // Default-check whichever real category tab is active (if any),
             // otherwise the AI suggestion will take over as soon as the
             // person starts typing.
-            const isRealCategory = SIGN_CATEGORIES.some(c => c.id === currentSignCategory);
+            const activeCategory = sourceCategory || currentSignCategory;
+            const isRealCategory = SIGN_CATEGORIES.some(c => c.id === activeCategory);
             const checkboxContainer = document.getElementById("design-category-checkboxes");
             checkboxContainer.innerHTML = SIGN_CATEGORIES.map(c => `
                 <label class="flex items-center gap-x-2 input-dark rounded-xl px-3 py-2 text-xs cursor-pointer">
                     <input type="checkbox" value="${c.id}" class="design-category-checkbox" onchange="handleManualCategoryChange()"
-                        ${isRealCategory && c.id === currentSignCategory ? "checked" : ""}>
+                        ${isRealCategory && c.id === activeCategory ? "checked" : ""}>
                     ${c.label}
                 </label>
             `).join("");
@@ -1187,6 +1250,7 @@
             });
 
             renderSignDesignsUI();
+            renderLibraryDesignsUI();
             showToast((wasAiPicked ? "Design added (AI detected) to " : "Design added to ") + categoryLabels.join(", "));
         }
 
@@ -1255,7 +1319,7 @@
                 </div>`;
         }
 
-        function buildSignCardHTML(design, categoryInfo, showCategoryBadge) {
+        function buildSignCardHTML(design, categoryInfo, showCategoryBadge, hideAddButton) {
             const title = design.sampleTitle || categoryInfo.sampleTitle;
             const subtitle = design.sampleSubtitle || categoryInfo.sampleSubtitle;
             const previewDesign = { ...design, sampleTitle: title, sampleSubtitle: subtitle };
@@ -1290,12 +1354,13 @@
                             ${SIGN_CATEGORIES.map(c => `<option value="${c.id}" ${c.id === categoryInfo.id ? "selected" : ""}>${c.label}</option>`).join("")}
                         </select>
                     </div>
+                    ${hideAddButton ? "" : `
                     <div class="px-3 pb-3">
                         <button onclick="addDesignToShortlist('${categoryInfo.id}', '${design.id}')"
                             class="w-full py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-x-1.5">
                             <i class="fa-solid fa-plus"></i> Add to Car Park
                         </button>
-                    </div>
+                    </div>`}
                 </div>
             `;
         }
@@ -1303,26 +1368,29 @@
         // Builds the list of designs to show for whatever tab is active.
         // For the two virtual tabs this pulls from every real category and
         // tags each design with which category it actually lives in.
-        function getDesignsForCurrentView() {
-            if (currentSignCategory === ALL_SIGNS_TAB.id) {
+        // Defaults to the in-job Signs tab's category; pass an explicit
+        // category (e.g. from the standalone Sign Library) to override.
+        function getDesignsForCurrentView(category) {
+            category = category || currentSignCategory;
+            if (category === ALL_SIGNS_TAB.id) {
                 let combined = [];
                 SIGN_CATEGORIES.forEach(cat => {
                     (signDesigns[cat.id] || []).forEach(d => combined.push({ design: d, categoryId: cat.id }));
                 });
                 return combined;
             }
-            if (currentSignCategory === ALL_FAVOURITES_TAB.id) {
+            if (category === ALL_FAVOURITES_TAB.id) {
                 let combined = [];
                 SIGN_CATEGORIES.forEach(cat => {
                     (signDesigns[cat.id] || []).filter(d => d.isFavorite).forEach(d => combined.push({ design: d, categoryId: cat.id }));
                 });
                 return combined;
             }
-            return (signDesigns[currentSignCategory] || []).map(d => ({ design: d, categoryId: currentSignCategory }));
+            return (signDesigns[category] || []).map(d => ({ design: d, categoryId: category }));
         }
 
         function renderSignDesignsUI() {
-            document.querySelectorAll(".sign-cat-tab").forEach(btn => {
+            document.querySelectorAll("#sign-cat-tabs .sign-cat-tab").forEach(btn => {
                 btn.classList.toggle("active", btn.dataset.cat === currentSignCategory);
             });
 
@@ -1355,6 +1423,93 @@
             grid.innerHTML = filtered.map(({ design, categoryId }) => {
                 const categoryInfo = SIGN_CATEGORIES.find(c => c.id === categoryId);
                 return buildSignCardHTML(design, categoryInfo, isAggregateView);
+            }).join("");
+        }
+
+        // ==================== STANDALONE SIGN LIBRARY MODAL ====================
+        // Same designs, same category/search/favourite logic as a job's
+        // Signs tab, just reachable straight from the dashboard with no
+        // "Add to Car Park" action (there's no job here to add one to).
+        function showSignLibraryModal() {
+            document.getElementById("sign-library-modal").classList.remove("hidden");
+            document.getElementById("sign-library-modal").classList.add("flex");
+            renderLibraryCatTabsUI();
+            renderLibraryDesignsUI();
+        }
+
+        function hideSignLibraryModal() {
+            document.getElementById("sign-library-modal").classList.remove("flex");
+            document.getElementById("sign-library-modal").classList.add("hidden");
+        }
+
+        function renderLibraryCatTabsUI() {
+            const container = document.getElementById("lib-cat-tabs");
+            if (!container) return;
+            container.innerHTML = getSignCatTabs().map(cat => `
+                <button onclick="switchLibraryCategory('${cat.id}')" data-cat="${cat.id}" class="sign-cat-tab px-4 py-2.5 rounded-t-xl text-sm font-medium text-slate-400 hover:text-slate-200 whitespace-nowrap ${cat.id === libraryCategory ? "active" : ""}">
+                    <i class="fa-solid ${cat.icon} mr-1.5"></i>${cat.label}
+                </button>
+            `).join("");
+        }
+
+        function switchLibraryCategory(catId) {
+            libraryCategory = catId;
+            const searchInput = document.getElementById("lib-search-input");
+            const favCheckbox = document.getElementById("lib-favorites-only");
+            const favLabel = document.getElementById("lib-favorites-only-label");
+            if (searchInput) searchInput.value = "";
+            if (favCheckbox) favCheckbox.checked = false;
+            librarySearchQuery = "";
+            libraryShowFavoritesOnly = false;
+            if (favLabel) favLabel.classList.toggle("hidden", catId === ALL_FAVOURITES_TAB.id);
+            renderLibraryCatTabsUI();
+            renderLibraryDesignsUI();
+        }
+
+        function handleLibrarySearch(value) {
+            librarySearchQuery = value;
+            renderLibraryDesignsUI();
+        }
+
+        function handleLibraryFavoritesToggle(checked) {
+            libraryShowFavoritesOnly = checked;
+            renderLibraryDesignsUI();
+        }
+
+        function renderLibraryDesignsUI() {
+            document.querySelectorAll("#lib-cat-tabs .sign-cat-tab").forEach(btn => {
+                btn.classList.toggle("active", btn.dataset.cat === libraryCategory);
+            });
+
+            const grid = document.getElementById("lib-designs-grid");
+            if (!grid) return;
+
+            const isAggregateView = libraryCategory === ALL_SIGNS_TAB.id || libraryCategory === ALL_FAVOURITES_TAB.id;
+            const isForcedFavorites = libraryCategory === ALL_FAVOURITES_TAB.id;
+            const entries = getDesignsForCurrentView(libraryCategory);
+            const query = librarySearchQuery.trim().toLowerCase();
+            const filtered = entries.filter(({ design }) => {
+                if ((libraryShowFavoritesOnly || isForcedFavorites) && !design.isFavorite) return false;
+                if (query && !design.name.toLowerCase().includes(query)) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                const entriesEmpty = entries.length === 0;
+                const emptyMessage = isForcedFavorites
+                    ? "No favourites yet — star a design to see it here"
+                    : (entriesEmpty ? "No designs yet — click \"Add Design\" to create one" : "No designs match");
+                grid.innerHTML = `
+                    <div class="col-span-full text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-image-slash text-3xl mb-2"></i>
+                        <p>${emptyMessage}</p>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(({ design, categoryId }) => {
+                const categoryInfo = SIGN_CATEGORIES.find(c => c.id === categoryId);
+                return buildSignCardHTML(design, categoryInfo, isAggregateView, true);
             }).join("");
         }
 
@@ -2225,20 +2380,35 @@
         }
 
         // ==================== STATS ====================
+        // A job "has" a stage if any of its signs currently sit there — one
+        // job can count toward multiple tiles at once (e.g. 2 signs in
+        // Proofing and 1 in Manufacturing), which is the accurate picture.
+        function jobHasStage(job, status) {
+            return Array.isArray(job.proofItems) && job.proofItems.some(p => p.status === status);
+        }
+
+        function jobFullyInstalled(job) {
+            return Array.isArray(job.proofItems) && job.proofItems.length > 0 &&
+                job.proofItems.every(p => p.status === "confirmed" && p.installedDate);
+        }
+
         function updateStats() {
-            const active = jobs.filter(j => j.status === "Active").length;
-            const proof = jobs.filter(j => j.status === "Waiting for Proof").length;
-            const approval = jobs.filter(j => j.status === "Waiting for Approval").length;
-            const manufacturing = jobs.filter(j => j.status === "Manufacturing").length;
-            const ready = jobs.filter(j => j.status === "Ready to Install").length;
-            const completed = jobs.filter(j => j.status === "Completed").length;
+            const liveJobs = jobs.filter(j => j.status !== "Archived");
+            liveJobs.forEach(ensureProofingFields);
+
+            const active = liveJobs.filter(j => j.status === "Active").length;
+            const shortlistCount = liveJobs.filter(j => jobHasStage(j, "shortlist")).length;
+            const proofingCount = liveJobs.filter(j => jobHasStage(j, "proofing")).length;
+            const manufacturingCount = liveJobs.filter(j => jobHasStage(j, "manufacturing")).length;
+            const readyCount = liveJobs.filter(j => jobHasStage(j, "confirmed") && !jobFullyInstalled(j)).length;
+            const completedCount = liveJobs.filter(j => jobFullyInstalled(j)).length;
 
             document.getElementById("stat-active").textContent = active;
-            document.getElementById("stat-proof").textContent = proof;
-            document.getElementById("stat-approval").textContent = approval;
-            document.getElementById("stat-manufacturing").textContent = manufacturing;
-            document.getElementById("stat-ready").textContent = ready;
-            document.getElementById("stat-completed").textContent = completed;
+            document.getElementById("stat-proof").textContent = shortlistCount;
+            document.getElementById("stat-approval").textContent = proofingCount;
+            document.getElementById("stat-manufacturing").textContent = manufacturingCount;
+            document.getElementById("stat-ready").textContent = readyCount;
+            document.getElementById("stat-completed").textContent = completedCount;
 
             updateArchiveCount();
         }
@@ -2594,11 +2764,22 @@
             container.innerHTML = "";
 
             let jobsToShow = (filteredJobs || jobs).filter(j => j.status !== "Archived");
+            jobsToShow.forEach(ensureProofingFields);
 
             if (currentFilter === "active") {
                 jobsToShow = jobsToShow.filter(j => j.status === "Active");
             } else if (currentFilter === "overdue") {
                 jobsToShow = jobsToShow.filter(j => j.progress < 100);
+            } else if (currentFilter === "shortlist") {
+                jobsToShow = jobsToShow.filter(j => jobHasStage(j, "shortlist"));
+            } else if (currentFilter === "proofing") {
+                jobsToShow = jobsToShow.filter(j => jobHasStage(j, "proofing"));
+            } else if (currentFilter === "manufacturing") {
+                jobsToShow = jobsToShow.filter(j => jobHasStage(j, "manufacturing"));
+            } else if (currentFilter === "ready") {
+                jobsToShow = jobsToShow.filter(j => jobHasStage(j, "confirmed") && !jobFullyInstalled(j));
+            } else if (currentFilter === "completed") {
+                jobsToShow = jobsToShow.filter(j => jobFullyInstalled(j));
             }
 
             if (jobsToShow.length === 0) {
@@ -2649,8 +2830,15 @@
         function filterJobs(filter) {
             currentFilter = filter;
             document.querySelectorAll(".filter-tab").forEach(tab => tab.classList.remove("active", "bg-slate-800"));
-            document.getElementById("filter-" + filter).classList.add("active", "bg-slate-800");
+            const pill = document.getElementById("filter-" + filter);
+            if (pill) pill.classList.add("active", "bg-slate-800");
+
+            document.querySelectorAll(".stat-tile").forEach(tile => tile.classList.remove("border-blue-500"));
+            const tile = document.querySelector(`.stat-tile[data-filter="${filter}"]`);
+            if (tile) tile.classList.add("border-blue-500");
+
             renderJobs();
+            document.getElementById("jobs-list").scrollIntoView({ behavior: "smooth", block: "start" });
         }
 
         // ==================== JOB DETAIL MODAL ====================
